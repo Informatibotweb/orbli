@@ -770,6 +770,12 @@
     .stat-val{font-family:var(--font-display);font-weight:800;font-size:22px;display:block;color:var(--accent)}
     .stat-lbl{font-size:12px;color:var(--text-tertiary);font-weight:600}
     .profile-bio{font-size:14px;color:var(--text-secondary);margin-top:var(--s2);line-height:1.7;font-style:italic}
+    .profile-name{font-family:var(--font-display);font-size:22px;font-weight:800;letter-spacing:-0.02em}
+    .profile-tag{font-size:13px;color:var(--text-tertiary);font-weight:600;margin-top:2px}
+    .profile-mail{font-size:14px;color:var(--text-secondary);margin-top:var(--s2);font-weight:600}
+    .profile-dati{display:flex;flex-wrap:wrap;gap:var(--s4);font-size:13px;color:var(--text-tertiary);margin-top:var(--s2)}
+    .profile-info{flex:1;min-width:0}
+    .profile-actions{display:flex;gap:var(--s3);flex-wrap:wrap;margin-bottom:var(--s5)}
 
     /* ═══════════════════════════════════════════════
        SETTINGS
@@ -985,7 +991,16 @@
       </div>
     </div>
 
-
+    <div id="view-profile" class="page">
+      <div class="profile-hero glass" id="profile-hero"></div>
+      <div class="profile-actions" id="profile-actions"></div>
+      <div class="feed-section">
+        <div class="section-title">
+          <span class="section-title-emoji">📖</span> Post di <span id="profile-username-label">@</span>
+        </div>
+        <div id="profile-posts" class="posts-list"></div>
+      </div>
+    </div>
 
   </main>
 
@@ -1099,6 +1114,8 @@
     const SERVER   = 'https://penguin.tailcff90a.ts.net';
     const FLOW_API = SERVER + '/api/nexiflow';        // post, stati, allegati
     const ACC_API  = SERVER + '/api/nexiquaraccount'; // account, foto profilo, chat
+    const ORBLI_URL = 'https://orbli.netlify.app';            // link pubblici profili /@utente
+    const CHAT_URL  = 'https://linkloopchat.netlify.app';     // chat LinkLoopChat su Netlify
     const HD       = { 'ngrok-skip-browser-warning': 'true' }; // innocuo su Tailscale
     const UPLOADER = 'orbli';
 
@@ -2042,21 +2059,107 @@
       },
 
       switchPage(page) {
-        if (page === 'chat') return this.apriChatOrbli(); // la chat vive in orbli-chat.html
+        if (page === 'chat') return this.apriChatOrbli(); // la chat vive su linkloopchat.netlify.app
         document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
         document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
         el(`view-${page}`).classList.add('active');
-        el(`nav-${page}`).classList.add('active');
+        const nav = el(`nav-${page}`);
+        if (nav) nav.classList.add('active');
+        else if (page === 'profile') el('nav-feed').classList.add('active'); // il profilo sta sotto il feed
       },
 
-      /** URL della chat privata (pagina separata, stessi account di Orbli). */
+      /** URL della chat privata: LinkLoopChat su Netlify, con la chat già pronta. */
       urlChatOrbli(username) {
-        return 'orbli-chat.html' + (username ? '?utente=' + encodeURIComponent(username) : '');
+        return CHAT_URL + (username ? '/@' + encodeURIComponent(username) : '');
       },
 
-      /** Apre la chat privata, opzionalmente su una conversazione precisa. */
+      /** Apre la chat privata (LinkLoopChat), opzionalmente su una conversazione precisa. */
       apriChatOrbli(username) {
         window.location.href = this.urlChatOrbli(username);
+      },
+
+      /** URL pubblico del profilo (orbli.netlify.app/@utente). */
+      urlProfilo(username) {
+        return ORBLI_URL + '/@' + encodeURIComponent(username);
+      },
+
+      /** Profilo pubblico: foto, mail e dati dell'account, post e azioni (chat, copia link). */
+      apriProfilo(username) {
+        const chiave = String(username || '').trim().replace(/^@/, '');
+        if (!chiave) return;
+        const acc = State.accounts.find(a => (a.username || '').toLowerCase() === chiave.toLowerCase());
+        const prof = State.usersMap[chiave] || State.usersMap[(acc && acc.username) || ''] || {};
+        const user = (acc && acc.username) || prof.username || chiave;
+        const nome = (acc && acc.nome) || prof.nome || user;
+        const mail = (acc && acc.email) || prof.email || '';
+        const miei = State.posts.filter(p => p.author === user);
+        const commenti = State.posts.reduce((n, p) => n + (p.comments || []).filter(c => c.user === user).length, 0);
+
+        el('profile-hero').innerHTML = `
+          ${avatarRemoto({ avatar: prof.avatar || '', nome: nome }, 'avatar-lg', user)}
+          <div class="profile-info">
+            <div class="profile-name">${esc(nome)}</div>
+            <div class="profile-tag">@${esc(user)}</div>
+            ${mail ? `<div class="profile-mail">✉️ ${esc(mail)}</div>` : ''}
+            <div class="profile-stats">
+              <div class="stat"><span class="stat-val">${miei.length}</span><span class="stat-lbl">Post</span></div>
+              <div class="stat"><span class="stat-val">${commenti}</span><span class="stat-lbl">Commenti</span></div>
+            </div>
+            ${acc && acc.creato_il ? `<div class="profile-dati">🗓️ su Orbli dal ${new Date(acc.creato_il).toLocaleDateString('it-IT')}${acc.ultimo_accesso ? ` · ⏰ ultimo accesso ${new Date(acc.ultimo_accesso).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}` : ''}</div>` : ''}
+          </div>`;
+
+        el('profile-actions').innerHTML = `
+          <button class="btn btn-primary" id="btn-profile-chat">💬 Apri chat</button>
+          <button class="btn btn-ghost" id="btn-profile-copy">🔗 Copia link profilo</button>
+          <button class="btn btn-ghost" id="btn-profile-back">← Indietro</button>`;
+        caricaImmaginiRemote(el('profile-hero'));
+        el('btn-profile-chat').addEventListener('click', () => this.apriChatOrbli(user));
+        el('btn-profile-copy').addEventListener('click', () => this.copiaLinkProfilo(user));
+        el('btn-profile-back').addEventListener('click', () => this.switchPage('feed'));
+
+        el('profile-username-label').textContent = '@' + user;
+        const box = el('profile-posts');
+        box.innerHTML = '';
+        if (miei.length === 0) {
+          box.innerHTML = `
+            <div class="empty-state glass">
+              <span class="empty-state-emoji">🗒️</span>
+              <div class="empty-state-title">Ancora nessun post</div>
+              <p>${esc(nome)} non ha ancora pubblicato nulla.</p>
+            </div>`;
+        } else {
+          miei.forEach(p => box.appendChild(this.costruisciCard(p)));
+          caricaImmaginiRemote(box);
+        }
+        this.switchPage('profile');
+      },
+
+      /** Se l'URL è /@utente (es. orbli.netlify.app/@ahmed.osmanovic), apre quel profilo. */
+      apriProfiloDaUrl() {
+        try {
+          const m = location.pathname.match(/^\/@([^\/?#]+)/);
+          if (!m) return false;
+          this.apriProfilo(decodeURIComponent(m[1]));
+          return true;
+        } catch (e) { return false; }
+      },
+
+      /** Copia negli appunti il link pubblico del profilo (orbli.netlify.app/@utente). */
+      async copiaLinkProfilo(username) {
+        const url = this.urlProfilo(username);
+        try {
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            await navigator.clipboard.writeText(url);
+          } else {
+            const ta = document.createElement('textarea');
+            ta.value = url; ta.style.position = 'fixed'; ta.style.opacity = '0';
+            document.body.appendChild(ta); ta.focus(); ta.select();
+            document.execCommand('copy'); ta.remove();
+          }
+          Toast.success('Link del profilo copiato!', url);
+        } catch (e) {
+          Toast.error('Copia non riuscita: ' + url);
+        }
       },
 
       toggleTheme() {
@@ -2242,6 +2345,7 @@
         });
         card.querySelector('.comment-input-field').addEventListener('keydown', (e) => { if (e.key === 'Enter') Post.addComment(p.id); });
         card.querySelector('.btn-send-comment').addEventListener('click', () => Post.addComment(p.id));
+        card.querySelector('.post-author-link').addEventListener('click', () => UI.apriProfilo(p.author));
 
         return card;
       },
@@ -2379,10 +2483,9 @@
             item.className = 'search-item';
             item.innerHTML = avatarRemoto(u, 'avatar-sm', u.username || u.nome).replace('class="avatar avatar-sm"', 'class="avatar avatar-sm" style="width:24px;height:24px;"') + ` <div><span class="search-item-name">${esc(u.nome)}</span> <span class="search-item-tag">@${esc(u.username)}</span></div>`;
             item.addEventListener('click', () => {
-              Toast.info(`Avvio conversazione con ${u.nome}`);
               el('search-bar').value = '';
               dropdown.classList.remove('open');
-              this.apriChatOrbli(u.username);
+              this.apriProfilo(u.username);
             });
             dropdown.appendChild(item);
             caricaImmaginiRemote(item);
@@ -2688,8 +2791,10 @@
         }
       }
 
-      if (State.user) UI.showApp();
-      else UI.showAuth('login');
+      if (State.user) {
+        UI.showApp();
+        UI.apriProfiloDaUrl(); // deep link orbli.netlify.app/@utente
+      } else UI.showAuth('login');
     });
 
     // polling leggero: i dati restano condivisi tra i dispositivi
