@@ -1114,7 +1114,7 @@
     const SERVER   = 'https://penguin.tailcff90a.ts.net';
     const FLOW_API = SERVER + '/api/nexiflow';        // post, stati, allegati
     const ACC_API  = SERVER + '/api/nexiquaraccount'; // account, foto profilo, chat
-    const ORBLI_URL = 'https://orbli.netlify.app';            // link pubblici profili /@utente
+    const ORBLI_URL = 'https://orbli.netlify.app';            // link pubblici profili #@utente
     const CHAT_URL  = 'https://linkloopchat.netlify.app';     // chat LinkLoopChat su Netlify
     const HD       = { 'ngrok-skip-browser-warning': 'true' }; // innocuo su Tailscale
     const UPLOADER = 'orbli';
@@ -2068,9 +2068,10 @@
         else if (page === 'profile') el('nav-feed').classList.add('active'); // il profilo sta sotto il feed
       },
 
-      /** URL della chat privata: LinkLoopChat su Netlify, con la chat già pronta. */
+      /** URL della chat privata: LinkLoopChat su Netlify con la chat già pronta.
+       *  Usa il formato hash (/#@utente) che funziona su qualsiasi hosting, senza rewrite. */
       urlChatOrbli(username) {
-        return CHAT_URL + (username ? '/@' + encodeURIComponent(username) : '');
+        return CHAT_URL + (username ? '/#@' + encodeURIComponent(username) : '');
       },
 
       /** Apre la chat privata (LinkLoopChat), opzionalmente su una conversazione precisa. */
@@ -2078,9 +2079,9 @@
         window.location.href = this.urlChatOrbli(username);
       },
 
-      /** URL pubblico del profilo (orbli.netlify.app/@utente). */
+      /** URL pubblico del profilo (orbli.netlify.app/#@utente): l'hash non tocca il server. */
       urlProfilo(username) {
-        return ORBLI_URL + '/@' + encodeURIComponent(username);
+        return ORBLI_URL + '/#@' + encodeURIComponent(username);
       },
 
       /** Profilo pubblico: foto, mail e dati dell'account, post e azioni (chat, copia link). */
@@ -2134,12 +2135,20 @@
         this.switchPage('profile');
       },
 
-      /** Se l'URL è /@utente (es. orbli.netlify.app/@ahmed.osmanovic), apre quel profilo. */
+      /** Se l'URL porta a un utente (#@utente consigliato, poi ?utente= e /@utente),
+       *  apre quel profilo. L'hash funziona al 100% senza configurazione del server. */
       apriProfiloDaUrl() {
         try {
-          const m = location.pathname.match(/^\/@([^\/?#]+)/);
-          if (!m) return false;
-          this.apriProfilo(decodeURIComponent(m[1]));
+          let chiave = null;
+          const h = location.hash.match(/^#@([^&?#/]+)/);
+          if (h) chiave = h[1];
+          if (!chiave) chiave = new URLSearchParams(location.search).get('utente');
+          if (!chiave) {
+            const p = location.pathname.match(/^\/@([^\/?#]+)/);
+            if (p) chiave = p[1];
+          }
+          if (!chiave) return false;
+          this.apriProfilo(decodeURIComponent(chiave));
           return true;
         } catch (e) { return false; }
       },
@@ -2793,7 +2802,7 @@
 
       if (State.user) {
         UI.showApp();
-        UI.apriProfiloDaUrl(); // deep link orbli.netlify.app/@utente
+        UI.apriProfiloDaUrl(); // deep link orbli.netlify.app/#@utente
       } else UI.showAuth('login');
     });
 
